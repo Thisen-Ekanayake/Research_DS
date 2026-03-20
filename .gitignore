@@ -1,1 +1,11 @@
 Project_Proposal-1.pdf
+
+csv/
+.venv/
+labour_report_all_csv_copy/
+all_data/
+
+*.txt
+*.png
+
+!requirements.txt
