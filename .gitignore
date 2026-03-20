@@ -4,6 +4,7 @@ csv/
 .venv/
 labour_report_all_csv_copy/
 all_data/
+labour_data_analysis_copy/
 
 *.txt
 *.png
