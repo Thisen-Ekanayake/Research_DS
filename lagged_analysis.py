@@ -17,7 +17,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Setup
-base_path = Path('/Users/janudax/Computer_Science/Uom stuff/Reaserch_DS')
+base_path = Path('.').resolve()
 labour_path = base_path / 'labour' / 'csv'
 economy_path = base_path / 'economy'
 

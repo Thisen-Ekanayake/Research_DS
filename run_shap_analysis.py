@@ -32,7 +32,7 @@ print("\n" + "=" * 60)
 print("LOAD AND EXPLORE ECONOMIC DATA")
 print("=" * 60)
 
-base_path = Path('/Users/janudax/Computer_Science/Uom stuff/Reaserch_DS')
+base_path = Path('.').resolve()
 labour_path = base_path / 'labour' / 'csv'
 economy_path = base_path / 'economy'
 
@@ -328,4 +328,3 @@ print("=" * 60)
 print(f"\nOutput files:")
 print(f"  - shap_summary_plots.png")
 print(f"  - shap_dependence_plots.png")
-print(f"  - SHAP_Economic_Unemployment_Analysis.ipynb")
