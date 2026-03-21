@@ -1,0 +1,7 @@
+Series,Break Year,ZA t-stat,CV 1%,CV 5%,CV 10%,Significance,Reject Unit Root
+Underemployment Rate,2021,-5.4655,-5.57,-5.08,-4.82,**,True
+GDP Growth,2022,-4.9136,-5.57,-5.08,-4.82,*,True
+Inflation,2022,-17.6175,-5.57,-5.08,-4.82,***,True
+Agricultural Output Index,2020,-3.4547,-5.57,-5.08,-4.82,,False
+Services Employment Share,2018,-3.9653,-5.57,-5.08,-4.82,,False
+Youth LFPR,2018,-3.2891,-5.57,-5.08,-4.82,,False
