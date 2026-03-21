@@ -30,3 +30,9 @@ To supplement the primary dashboard, we developed deeper diagnostic visualizatio
 - **Demographic Disparity**: Highlights how female workers transition into underemployment at steeper angles than their male counterparts during shocks.
 - **Time-Lagged Cross-Correlation (TLCC)**: Confirms the presence of extreme downstream delays (GDP/Inflation effects lagging by multiple quarters), strictly justifying the **VECM / ARDL** causal models over simpler multi-variate regressions.
 - **Quarterly Outlier Stationarity**: Provides the base rationale for the structural tuning of hyperparameters in the **SARIMA** approach.
+
+## Structural Break & Interaction Coefficients (RQ3)
+Conforming to the latest checklist phase, the repository addresses RQ3 in `Data_Analysis/RQ3_Interaction_Report.ipynb`.
+Taking the mathematical breakpoints found via our Zivot-Andrews testing (2021/2022 shock borders), we engineered crisis dummies and built OLS Interaction regressions (`Underemployment ~ GDP + Crisis_Dummy + GDP:Crisis_Dummy`). 
+
+This quantifies the elasticity shifts, conclusively identifying how the statistical sensitivity of Sri Lanka's labor force towards inflation and GDP changed abruptly *after* the structural breaks.
