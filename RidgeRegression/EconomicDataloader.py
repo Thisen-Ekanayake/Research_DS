@@ -4,6 +4,7 @@ import numpy as np
 
 ## Load GDP data
 gdp_df = pd.read_csv('../economy/GDP.csv')
+gdp_df=gdp_df[20:]
 
 ## Load Insternet User data
 internet_user_df = pd.read_csv('../economy/Internet users for Sri Lank.csv')
