@@ -84,6 +84,14 @@ print("Using macro predictors:", actual_macro_cols)
 # Define our two target variables
 targets = ['Underemployment_Rate', 'Qual_Underemployment_Rate']
 
+# Convert all variables of interest to numeric, replacing any non-numeric strings with NaN
+for col in targets + actual_macro_cols:
+    df[col] = pd.to_numeric(df[col].astype(str).str.strip().replace('', np.nan), errors='coerce')
+
+# XGBoost cannot handle NaNs if we don't handle them or if we have missing target rows.
+# Let's drop rows where the target is missing
+df = df.dropna(subset=targets).copy()
+
 df[targets + actual_macro_cols].head()""")
 
 md_eda = nbf.v4.new_markdown_cell("""## 2. Comparative EDA""")
