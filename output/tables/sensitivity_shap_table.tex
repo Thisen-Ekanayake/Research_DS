@@ -1,0 +1,21 @@
+\begin{table}[ht]
+\caption{SHAP Feature Importance: Hours-Based vs Qualification-Based}
+\label{tab:shap_sensitivity}
+\setlength{\tabcolsep}{3pt}
+\footnotesize
+\begin{tabular}{lrrrrc}
+\toprule
+\textbf{Feature} & \textbf{Hours \%} & \textbf{Rank} & \textbf{Qual \%} & \textbf{Rank} & \textbf{$|\Delta|$}\\
+\midrule
+Exchange Rate & 34.0 & 1 & 75.8 & 1 & 0\\
+GDP Growth & 21.3 & 2 & 8.5 & 2 & 0\\
+Youth LFPR & 17.5 & 3 & 7.4 & 3 & 0\\
+Agri. Output & 14.8 & 4 & 1.1 & 5 & 1\\
+Informal Emp. & 10.0 & 5 & 0.6 & 6 & 1\\
+Inflation$\dagger$ & 1.5 & 6 & 6.4 & 4 & 2\\
+Remittances & 0.8 & 7 & 0.1 & 7 & 0\\
+\midrule
+\multicolumn{6}{l}{\scriptsize Spearman $\rho = 0.893$ ($p = 0.007$). $\dagger$Rank shift $\geq 2$.}\\
+\bottomrule
+\end{tabular}
+\end{table}
