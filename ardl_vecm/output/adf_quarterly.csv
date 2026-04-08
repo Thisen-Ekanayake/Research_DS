@@ -1,0 +1,9 @@
+Variable,ADF_levels_p,ADF_diff_p,Integration
+Underemployment_Rate,0.9707,0.0,I(1)
+GDP_Growth_Rate,0.9945,0.3591,I(2)+
+Inflation_Rate,0.1472,0.0384,I(1)
+Informal_Pct,0.0,0.1879,I(0)
+Youth_LFPR,0.0,0.2586,I(0)
+Remittances_USD,0.5152,0.0,I(1)
+Exchange_Rate,0.3837,0.0002,I(1)
+Agri_Output_Index,0.415,0.0,I(1)
