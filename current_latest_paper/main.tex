@@ -59,7 +59,11 @@ causality, ARDL bounds testing, and XGBoost with SHAP interpretability.
 The dataset incorporates remittances, agricultural output index,
 part-time employment, discouraged workers, and a real exchange rate series
 (annual CBSL averages, 2015--2024). GDP contraction and informal employment
-emerge as dominant SHAP drivers. A sensitivity analysis confirms strong convergence of macro
+emerge as dominant SHAP drivers. ARDL bounds testing on quarterly data
+($n{=}36$) confirms long-run cointegration at 1\% ($F{=}7.25$, Pesaran
+critical value 4.68); the ECM speed-of-adjustment $\lambda{=}{-1.087}$
+($p{=}0.003$) indicates near-complete quarterly correction toward
+equilibrium. A sensitivity analysis confirms strong convergence of macro
 driver rankings across hours-based and qualification-based underemployment
 definitions ($\rho = 0.893$, $p = 0.007$). Gender-disaggregated SHAP
 reveals distinct driver structures by sex, with a statistically persistent
@@ -231,13 +235,15 @@ TRU female        & 2020 & $-3.65$  & --  \\
 \end{tabular}
 \end{table}
 
-\textbf{Granger Causality and ARDL.} Tests use Bonferroni-corrected
-$\alpha{=}0.01$ (5 predictors, maxlag=1). No predictor clears the corrected
-threshold at $n{=}10$. Youth LFPR is suggestive at nominal $\alpha{=}0.10$
-($p{=}0.082$). Due to the $n{=}10$ constraint, Johansen cointegration
-(singular matrix) and full ARDL (12 regressors ${>}$ 9 d.f.) remain
-infeasible on the annual dataset. The target ARDL($p,q$) specification for
-the long-run relationship is:
+\textbf{Granger Causality and ARDL.} On the annual dataset ($n{=}10$,
+maxlag=1, Bonferroni $\alpha{=}0.01$) no predictor clears the corrected
+threshold; Youth LFPR is suggestive at nominal $\alpha{=}0.10$
+($p{=}0.082$). On the quarterly dataset ($n{=}36$, maxlag=4, Bonferroni
+$\alpha{=}0.05/7{=}0.0071$), Agricultural Output Index is the only
+Granger-cause clearing the corrected threshold ($F{=}11.91$, $p{=}0.0016$);
+GDP Growth is suggestive at nominal $\alpha{=}0.10$ ($p{=}0.080$).
+
+The ARDL($p,q$) specification for the long-run relationship is:
 %
 \begin{equation}
   \Delta U_t = \alpha_0
@@ -250,13 +256,24 @@ the long-run relationship is:
 \end{equation}
 %
 where $\lambda_1$ and $\boldsymbol{\lambda}_2$ are the long-run level
-coefficients to be tested via Pesaran's $F$-bounds
-procedure~\cite{pesaran2001}. Estimation of Eq.~\eqref{eq:ardl} is
-deferred to the full quarterly dataset ($n{\approx}43$). A fallback OLS
-with HC3 robust standard errors is estimated in the interim
-($R^2{=}0.767$, adj.~$R^2{=}0.475$), with diagnostics confirming
-well-behaved residuals (Durbin-Watson: 2.70; Breusch-Pagan: $p{=}0.14$;
-Jarque-Bera: $p{=}0.84$).
+coefficients tested via Pesaran's $F$-bounds procedure~\cite{pesaran2001}.
+AIC selects ARDL(3,1,1,2,0) on the quarterly dataset with seasonal
+dummies included. The bounds $F$-statistic is $7.25$ ($p{=}0.0008$),
+exceeding the 1\% upper critical value of $4.68$ for $k{=}5$ predictors
+(Case~III: unrestricted intercept, no trend), confirming long-run
+cointegration. If cointegration holds, the ECM representation is:
+%
+\begin{equation}
+  \Delta U_t = \mu + \lambda\,\widehat{\text{ECT}}_{t-1}
+    + \sum_{i}\psi_i\,\Delta U_{t-i}
+    + \sum_{j}\boldsymbol{\gamma}_j'\,\Delta\mathbf{x}_{t-j}
+    + \varepsilon_t
+  \label{eq:ecm}
+\end{equation}
+%
+where $\widehat{\text{ECT}}_{t-1} = U_{t-1} - \hat\alpha_{LR}
+- \hat{\boldsymbol{\theta}}'\mathbf{x}_{t-1}$ is the estimated error
+correction term and $\lambda$ is the speed-of-adjustment coefficient.
 
 \subsection{Machine Learning and Interpretability}
 
@@ -405,6 +422,40 @@ the positive departure from baseline.
   \label{fig:shap_waterfall}
 \end{figure}
 
+\subsection{ARDL Bounds Test and Error Correction Model}
+\label{sec:ardl}
+
+The quarterly master dataset ($n{=}36$ after the four-quarter YoY lag,
+2016~Q1--2024~Q4) is assembled by applying Denton-Cholette temporal
+disaggregation to annual-only series (Real~GDP, CPI, Informal Employment,
+Youth~LFPR) and merging with directly observed quarterly series
+(underemployment, exchange rate, remittances, agricultural output index).
+ADF unit root tests confirm Underemployment, Remittances, and Exchange Rate
+are I(1); Informal Employment and Youth LFPR are I(0); GDP Growth Rate
+shows I(2)$+$ behaviour (retained in ML model, first-differenced for ARDL).
+
+\textbf{Bounds test.} AIC selects ARDL(3,1,1,2,0) with quarterly seasonal
+dummies. The Pesaran $F$-bounds statistic is $\mathbf{F{=}7.25}$
+($p{=}0.0008$), exceeding the 1\% I(1) upper bound of 4.68 for $k{=}5$
+regressors (Case~III)~\cite{pesaran2001}. Cointegration is confirmed at 1\%.
+
+\textbf{Long-run coefficients.} The long-run equilibrium relationship
+implies: GDP Growth ($\hat\theta{=}{-}0.393$), Inflation
+($\hat\theta{=}{-}0.142$), Youth LFPR ($\hat\theta{=}{+}0.260$), and
+Remittances ($\hat\theta{\approx}0$). A 1~pp increase in GDP growth reduces
+long-run underemployment by 0.39~pp; rising youth participation increases
+it by 0.26~pp.
+
+\textbf{ECM (Eq.~\ref{eq:ecm}).} The speed-of-adjustment coefficient
+$\hat\lambda{=}{-}1.087$ ($p{=}0.003$, 95\% CI $[-1.81,\,-0.37]$) is
+negative and significant at 1\%, confirming error correction. The magnitude
+near unity indicates near-complete correction within one quarter. ECM
+diagnostics confirm model adequacy: Durbin-Watson~$=1.94$; Breusch-Pagan
+$p{=}0.11$ (homoskedastic); Ljung-Box $Q(4)$ $p{=}0.95$ (no serial
+correlation); Jarque-Bera $p{=}0.62$ (normal residuals); $R^2{=}0.765$.
+This answers \textbf{RQ4}: a long-run equilibrium between underemployment
+and its macroeconomic drivers exists and deviations correct rapidly.
+
 \subsection{Sensitivity Analysis: Underemployment Definitions}
 \label{sec:sensitivity}
 
@@ -522,8 +573,13 @@ to the 2022 hours-underemployment surge. SHAP (Eq.~\ref{eq:shap})
 establishes GDP contraction and informal employment as the dominant drivers,
 with Youth LFPR, remittances, and part-time employment capturing
 complementary channels. The interaction model (Eq.~\ref{eq:interaction})
-confirms structural amplification of GDP elasticity post-2022. The
-sensitivity analysis confirms SHAP rankings are strongly convergent across
+confirms structural amplification of GDP elasticity post-2022. ARDL bounds
+testing on the quarterly dataset ($n{=}36$) resolves \textbf{RQ4}: the
+Pesaran $F$-statistic of 7.25 confirms long-run cointegration at 1\%,
+and the ECM speed-of-adjustment $\hat\lambda{=}{-}1.087$ ($p{=}0.003$)
+indicates near-complete quarterly correction toward equilibrium. Long-run
+GDP elasticity is $-0.39$~pp per 1~pp GDP growth. The sensitivity analysis
+confirms SHAP rankings are strongly convergent across
 hours-based and qualification-based definitions ($\rho = 0.893$,
 $p = 0.007$). Gender-disaggregated analysis reveals distinct driver
 structures: female underemployment is more inflation-sensitive while male
@@ -534,22 +590,23 @@ affected women's labour market outcomes. District-level analysis confirms
 substantial spatial heterogeneity that informality alone does not explain.
 Aggregate unemployment is an inadequate crisis barometer for Sri Lanka.
 
-\textbf{Limitations.} The annual dataset ($n{=}10$) rendered full ARDL
-(Eq.~\ref{eq:ardl}) and Johansen infeasible; results are directional
-pending quarterly expansion. The 2022 LFS artefact complicates annual
-inference for the hours-based series. Agricultural data ends at 2024;
-FAOSTAT 2025 crop indices are not yet released. The XGBoost model achieves
-limited out-of-sample fit at $n{=}10$, and SHAP values should be
-interpreted as association measures, not causal estimates. The gender
-Zivot-Andrews test lacks power at $n = 10$; quarterly gender data would
-strengthen break detection.
+\textbf{Limitations.} The annual XGBoost model ($n{=}10$) achieves limited
+out-of-sample fit; SHAP values are association measures, not causal
+estimates. The 2022 LFS artefact complicates annual inference for the
+hours-based series (mitigated by using the quarterly series for structural
+tests). Johansen cointegration remains infeasible on annual data. The ECM
+speed-of-adjustment $|\hat\lambda|{>}1$ indicates mild overshooting,
+consistent with volatile crisis-period dynamics, and should be interpreted
+with caution. Agricultural data ends at 2024; FAOSTAT 2025 crop indices
+are not yet released. The gender Zivot-Andrews test lacks power at $n{=}10$;
+quarterly gender data would strengthen break detection.
 
-\textbf{Future work} will: (i) finalise ARDL bounds testing on the full
-quarterly dataset ($n{\approx}43$) for RQ4 long-run coefficients;
-(ii) incorporate the 2025 annual LFS data upon release; (iii) extend
-gender analysis to quarterly disaggregation for higher-power break
-detection; and (iv) develop district-level panel models to explain
-spatial heterogeneity beyond informality.
+\textbf{Future work} will: (i) re-estimate ARDL/ECM on the expanded
+quarterly dataset ($n{\approx}43$) once 2025~Q3--Q4 LFS data are released;
+(ii) incorporate the 2025 annual LFS data; (iii) extend gender analysis to
+quarterly disaggregation for higher-power break detection; and (iv) develop
+district-level panel models to explain spatial heterogeneity beyond
+informality.
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{references}

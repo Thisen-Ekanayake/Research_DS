@@ -1,0 +1,4 @@
+Model,R2,Adj_R2,Interaction_coef,Interaction_p,CI_low,CI_high,N
+GDP×Crisis,0.194,0.118,-0.1155,0.7672,-0.8803,0.6493,36
+Inflation×Crisis,0.162,0.083,-0.0869,0.7022,-0.5324,0.3586,36
+Informal×Crisis,0.095,0.01,2.8944,0.1531,-1.0768,6.8656,36

@@ -1,0 +1,8 @@
+Predictor,Best_Lag,F_stat,p_value,p_lag1,p_lag2,p_lag3,p_lag4,Reject_Bonferroni,Reject_Nominal,Verdict
+GDP_Growth_Rate,1,3.2655,0.0802,0.0802,0.3099,0.2131,0.4859,False,False,✗ No evidence
+Inflation_Rate,1,2.1785,0.1497,0.1497,0.3349,0.5536,0.5733,False,False,✗ No evidence
+Informal_Pct,1,1.6813,0.204,0.204,0.6084,0.9017,0.9899,False,False,✗ No evidence
+Youth_LFPR,1,1.1569,0.2901,0.2901,0.7288,0.8757,0.771,False,False,✗ No evidence
+Remittances_USD,1,1.7815,0.1914,0.1914,0.4919,0.7388,0.9117,False,False,✗ No evidence
+Exchange_Rate,2,1.2291,0.3073,0.4472,0.3073,0.5033,0.6364,False,False,✗ No evidence
+Agri_Output_Index,1,11.9053,0.0016,0.0016,0.0028,0.0076,0.1735,True,True,✅ Granger-causes (Bonferroni)
