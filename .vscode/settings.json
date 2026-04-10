@@ -3,5 +3,26 @@
     "python.analysis.extraPaths": [
         "C:\\Users\\ASUS\\AppData\\Roaming\\Python\\Python312\\site-packages"
     ],
-    "python.envFile": "${workspaceFolder}/.env"
+    "python.envFile": "${workspaceFolder}/.env",
+    "latex-workshop.latex.tools": [
+        {
+            "name": "tectonic",
+            "command": "C:\\Users\\ASUS\\AppData\\Local\\tectonic\\tectonic.exe",
+            "args": [
+                "--keep-logs",
+                "--keep-intermediates",
+                "--synctex",
+                "%DOC%"
+            ]
+        }
+    ],
+    "latex-workshop.latex.recipes": [
+        {
+            "name": "tectonic",
+            "tools": [
+                "tectonic"
+            ]
+        }
+    ],
+    "latex-workshop.latex.recipe.default": "first"
 }
