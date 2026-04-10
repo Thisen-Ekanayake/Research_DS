@@ -916,51 +916,72 @@ ILO LU1--LU4 framework      & Measurement artifact  & DCS             \\
 %% ===================================================
 
 Quarterly LFS micro-data reveals crisis underemployment peaks of 32.6\%,
-nine times the concurrent 3.8\% unemployment rate. Structural break tests
-confirm 2021--2022 as a statistically significant rupture in the
-underemployment--GDP--inflation system, with macro breaks leading the labour
-market break by one year. The incorporated variables reveal two additional
-findings: informal employment broke significantly in 2017, predating the
-crisis and suggesting formalisation pressure as a structural precondition;
-and part-time employment spiked in 2020 under COVID, acting as a precursor
-to the 2022 hours-underemployment surge. SHAP (Eq.~\ref{eq:shap})
-establishes GDP contraction and informal employment as the dominant drivers,
-with Youth LFPR, remittances, and part-time employment capturing
-complementary channels. The interaction model (Eq.~\ref{eq:interaction})
-confirms structural amplification of GDP elasticity post-2022. ARDL bounds
-testing on the quarterly dataset ($n{=}36$) resolves \textbf{RQ4}: the
-Pesaran $F$-statistic of 7.25 confirms long-run cointegration at 1\%,
-and the ECM speed-of-adjustment $\hat\lambda{=}{-}1.087$ ($p{=}0.003$)
-indicates near-complete quarterly correction toward equilibrium. Long-run
-GDP elasticity is $-0.39$~pp per 1~pp GDP growth. The sensitivity analysis
-confirms SHAP rankings are strongly convergent across
-hours-based and qualification-based definitions ($\rho = 0.893$,
-$p = 0.007$). Gender-disaggregated analysis reveals distinct driver
-structures: female underemployment is more inflation-sensitive while male
-underemployment responds primarily to GDP contractions. The persistent
-female--male gap ($W = 55.0$, $p = 0.001$) and widening qualification
-gender gap (0.97~pp to 4.42~pp) indicate the crisis disproportionately
-affected women's labour market outcomes. District-level analysis confirms
-substantial spatial heterogeneity that informality alone does not explain.
-Aggregate unemployment is an inadequate crisis barometer for Sri Lanka.
-
-\textbf{Limitations.} The annual XGBoost model ($n{=}10$) achieves limited
-out-of-sample fit; SHAP values are association measures, not causal
-estimates. The 2022 LFS artefact complicates annual inference for the
-hours-based series (mitigated by using the quarterly series for structural
-tests). Johansen cointegration remains infeasible on annual data. The ECM
-speed-of-adjustment $|\hat\lambda|{>}1$ indicates mild overshooting,
-consistent with volatile crisis-period dynamics, and should be interpreted
-with caution. Agricultural data ends at 2024; FAOSTAT 2025 crop indices
-are not yet released. The gender Zivot-Andrews test lacks power at $n{=}10$;
-quarterly gender data would strengthen break detection.
-
+nine times the concurrent 3.8\% unemployment rate, confirming that
+aggregate unemployment is an inadequate crisis barometer for Sri Lanka.
+Structural break tests confirm 2021--2022 as a statistically significant
+rupture in the underemployment--GDP--inflation system, with macro breaks
+leading the labour market break by one year. The incorporated variables
+reveal two additional findings: informal employment broke significantly
+in 2017, predating the crisis and suggesting formalisation pressure as
+a structural precondition; and part-time employment spiked in 2020
+under COVID, acting as a precursor to the 2022 hours-underemployment
+surge. SHAP (Eq.~\ref{eq:shap}) establishes GDP contraction and informal
+employment as the dominant drivers, with Youth LFPR, remittances, and
+part-time employment capturing complementary channels. The interaction
+model (Eq.~\ref{eq:interaction}) confirms structural amplification of
+GDP elasticity post-2022. The 2--3 quarter TLCC lags are consistent
+with a labour hoarding transmission mechanism, and hysteresis analysis
+indicates that underemployment remained structurally elevated through
+2024 despite partial macroeconomic recovery.
+ 
+ARDL bounds testing on the quarterly dataset ($n{=}36$) resolves
+\textbf{RQ4}: the Pesaran $F$-statistic of 7.25 confirms long-run
+cointegration at 1\%, and the ECM speed-of-adjustment
+$\hat\lambda{=}{-}1.087$ ($p{=}0.003$) indicates near-complete quarterly
+correction toward equilibrium. Long-run GDP elasticity is $-0.39$~pp
+per 1~pp GDP growth. The sensitivity analysis confirms SHAP rankings
+are strongly convergent across hours-based and qualification-based
+definitions ($\rho = 0.893$, $p = 0.007$). Gender-disaggregated
+analysis reveals distinct driver structures: female underemployment is
+more inflation-sensitive while male underemployment responds primarily
+to GDP contractions. The persistent female--male gap ($W = 55.0$,
+$p = 0.001$) and widening qualification gender gap (0.97~pp to 4.42~pp)
+indicate the crisis disproportionately affected women's labour market
+outcomes. District-level analysis confirms substantial spatial
+heterogeneity that informality alone does not explain. Four targeted
+policy interventions---EPF/ETF extension, graduate job matching, a
+remittance stabilisation mechanism, and DCS adoption of the ILO
+LU1--LU4 framework---address both demand-side and supply-side channels
+while upgrading statistical infrastructure.
+ 
+\textbf{Limitations.}
+This analysis confronts five primary constraints. First, the annual
+XGBoost model ($n{=}10$) imposes a binding degrees-of-freedom constraint
+that precludes Johansen cointegration testing and full multi-regressor
+ARDL estimation on the annual dataset; the quarterly panel ($n{\approx}43$)
+substantially mitigates this. Second, SHAP values capture predictive
+association, not causal direction: high informal employment importance
+may reflect common shocks driving both informality expansion and hours
+contraction simultaneously rather than a direct causal path. Third,
+real wages and sectoral employment shares (manufacturing, services,
+agriculture) were excluded due to insufficient quarterly availability
+for 2015--2025, despite being theoretically important transmission
+channels. Fourth, the 2022 LFS measurement artefact compromises annual
+inference for the hours-based series even with the quarterly workaround;
+results for that year should be interpreted with caution. Fifth, Sri
+Lanka represents a specific small open economy configuration (sovereign
+default combined with high remittance dependence), which may limit
+external validity to other developing countries absent a comparable
+crisis-remittance constellation. The ECM speed-of-adjustment
+$|\hat\lambda|{>}1$ indicates mild overshooting, consistent with
+volatile crisis-period dynamics, and should be interpreted cautiously.
+ 
 \textbf{Future work} will: (i) re-estimate ARDL/ECM on the expanded
 quarterly dataset ($n{\approx}43$) once 2025~Q3--Q4 LFS data are released;
-(ii) incorporate the 2025 annual LFS data; (iii) extend gender analysis to
-quarterly disaggregation for higher-power break detection; and (iv) develop
-district-level panel models to explain spatial heterogeneity beyond
-informality.
+(ii) incorporate the 2025 annual LFS data; (iii) extend gender analysis
+to quarterly disaggregation for higher-power break detection; and
+(iv) develop district-level panel models to explain spatial heterogeneity
+beyond informality.
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{references}
