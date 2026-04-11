@@ -1,13 +1,11 @@
 """
-run_shap_analysis.py
-====================
-SHAP analysis for Sri Lanka underemployment drivers.
-Updated to:
-  - Use master_dataset.csv (underemployment as target, not unemployment)
-  - Include 5 new variables: remittances, agri output, part-time emp,
-    discouraged workers, exchange rate (real, no imputation)
-  - Add force plot and waterfall chart for 2022 crisis peak (RQ2 missing output)
-  - Save all plots to Visualizations/
+run_shap_analysis.py  (v2 — methodologically corrected)
+=========================================================
+Fixes applied:
+  [2] Bootstrap CIs (500 iter) on mean |SHAP| — honest uncertainty on feature rankings
+  [3] LOOCV + Ridge replaces meaningless 80/20 XGBoost split on n=10
+  [4] Sub-period waterfall/force plots retained; sub-period SHAP ranking
+      explicitly caveated as illustrative (n<5 → no inferential claims)
 """
 
 import pandas as pd
@@ -18,120 +16,208 @@ import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings('ignore')
 
-import xgboost as xgb
 import shap
-from sklearn.metrics import r2_score
+from sklearn.linear_model import Ridge, RidgeCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import LeaveOneOut
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 from pathlib import Path
 
-MASTER = '/mnt/user-data/outputs/master_dataset.csv'
-OUTDIR = Path('/mnt/user-data/outputs')
+# ── PATHS ─────────────────────────────────────────────────────────────────────
+BASE   = Path(__file__).resolve().parent
+MASTER = BASE.parent / 'DataLoader' / 'master_dataset.csv'
+OUTDIR = BASE.parent / 'output'
 OUTDIR.mkdir(exist_ok=True)
 
-# ── 1. LOAD DATA ──────────────────────────────────────────────────────────────
-df = pd.read_csv(MASTER)
-df['year'] = df['year'].astype(int)
-df = df[df['year'].between(2015, 2024)].sort_values('year').reset_index(drop=True)
+# ── 1. LOAD & CLEAN DATA ──────────────────────────────────────────────────────
+df_raw = pd.read_csv(MASTER)
+df_raw.columns = df_raw.columns.str.strip()
+for col in df_raw.columns:
+    if col != 'Year':
+        df_raw[col] = pd.to_numeric(df_raw[col], errors='coerce')
 
-TARGET = 'underemployment_total'
+df = df_raw[df_raw['Year'].between(2015, 2024)].sort_values('Year').reset_index(drop=True)
 
+TARGET = 'Underemployment_Rate'
 FEATURES = [
-    'gdp_growth_pct',
-    'inflation_cpi_pct',
-    'exchange_rate_lkr_usd',
-    'youth_lfpr_pct',
-    'informal_emp_pct',
-    # New variables
-    'remittances_usd',
-    'agri_output_index',
-    'parttime_emp_pct',
-    'discouraged_seekers_n',
+    'GDP_Growth_Rate',
+    'Inflation_Rate',
+    'Exchange_Rate_LKR_USD',
+    'Youth_LFPR_15_24',
+    'Informal_Pct',
+    'Remit_Personal_remittances_received_current_US$',
+    'AgriProdIdx_Agriculture',
 ]
-# Keep only features present in dataset
+LABELS = {
+    'GDP_Growth_Rate':    'GDP Growth',
+    'Inflation_Rate':     'Inflation',
+    'Exchange_Rate_LKR_USD': 'Exchange Rate',
+    'Youth_LFPR_15_24':  'Youth LFPR',
+    'Informal_Pct':      'Informal Emp.',
+    'Remit_Personal_remittances_received_current_US$': 'Remittances',
+    'AgriProdIdx_Agriculture': 'Agri. Output',
+}
 FEATURES = [f for f in FEATURES if f in df.columns]
 
-print(f"Target: {TARGET}")
-print(f"Features ({len(FEATURES)}): {FEATURES}")
-print(f"n = {len(df)}")
+print(f"n = {len(df)}  (years {df['Year'].min()}–{df['Year'].max()})")
+print(f"Target : {TARGET}")
+print(f"Features ({len(FEATURES)}): {[LABELS.get(f, f) for f in FEATURES]}")
+print()
 
-X = df[FEATURES].copy()
-y = df[TARGET].copy()
+X = df[FEATURES].fillna(df[FEATURES].mean())
+y = df[TARGET].astype(float)
 
-# Impute any remaining NaNs column-wise (mean)
-X = X.fillna(X.mean())
+# Scale — Ridge is scale-sensitive
+scaler = StandardScaler()
+X_sc = pd.DataFrame(scaler.fit_transform(X), columns=FEATURES, index=df.index)
 
-# ── 2. TRAIN XGBOOST (temporal 80/20 split — time order preserved) ───────────
-split = int(len(df) * 0.8)
-X_train, X_test = X.iloc[:split], X.iloc[split:]
-y_train, y_test = y.iloc[:split], y.iloc[split:]
+# ── 2. MODEL: RIDGE + LOOCV ───────────────────────────────────────────────────
+# With n=10 an 80/20 split yields 2 test points — statistically meaningless.
+# LOOCV is the only valid evaluation strategy at this sample size.
 
-model = xgb.XGBRegressor(
-    n_estimators=100, max_depth=3, learning_rate=0.1,
-    subsample=0.8, random_state=42, verbosity=0
-)
-model.fit(X_train, y_train)
-r2_test = r2_score(y_test, model.predict(X_test))
-r2_full = r2_score(y, model.predict(X))
-print(f"\nXGBoost R² (test): {r2_test:.4f}")
-print(f"XGBoost R² (full): {r2_full:.4f}")
+ALPHAS = [0.01, 0.1, 1.0, 10.0, 100.0, 1000.0]
 
-# ── 3. SHAP VALUES ────────────────────────────────────────────────────────────
-explainer   = shap.TreeExplainer(model)
-shap_vals   = explainer(X)          # Explanation object (for waterfall/force)
-shap_matrix = explainer.shap_values(X)   # numpy array (for summary/beeswarm)
+# RidgeCV uses its own efficient LOOCV to select alpha
+ridge_cv = RidgeCV(alphas=ALPHAS, scoring='neg_mean_squared_error')
+ridge_cv.fit(X_sc, y)
+best_alpha = ridge_cv.alpha_
+print(f"Ridge α selected by LOOCV: {best_alpha}")
 
-mean_abs = np.abs(shap_matrix).mean(axis=0)
-importance_df = pd.DataFrame({'feature': FEATURES, 'mean_abs_shap': mean_abs})\
-    .sort_values('mean_abs_shap', ascending=False)
-print("\nSHAP feature importance:")
-print(importance_df.to_string(index=False))
+# Full LOOCV pass for reported metrics
+loo = LeaveOneOut()
+y_pred_loo = np.zeros(len(y))
+for train_idx, test_idx in loo.split(X_sc):
+    m = Ridge(alpha=best_alpha)
+    m.fit(X_sc.iloc[train_idx], y.iloc[train_idx])
+    y_pred_loo[test_idx] = m.predict(X_sc.iloc[test_idx])
 
-# ── 4. BEESWARM + BAR SUMMARY ─────────────────────────────────────────────────
+r2_loo   = r2_score(y, y_pred_loo)
+mae_loo  = mean_absolute_error(y, y_pred_loo)
+rmse_loo = np.sqrt(mean_squared_error(y, y_pred_loo))
+
+print(f"\nLOOCV performance (n={len(y)}, Ridge α={best_alpha}):")
+print(f"  R²   = {r2_loo:.3f}")
+print(f"  MAE  = {mae_loo:.4f} pp")
+print(f"  RMSE = {rmse_loo:.4f} pp")
+print("  NOTE: All metrics from LOOCV — no held-out annual split used.")
+
+# Final model on all data (for SHAP explanation)
+final_model = Ridge(alpha=best_alpha)
+final_model.fit(X_sc, y)
+
+# ── 3. SHAP ON FULL DATASET ───────────────────────────────────────────────────
+# LinearExplainer is exact for linear models (no approximation needed).
+explainer   = shap.LinearExplainer(final_model, X_sc)
+shap_matrix = explainer.shap_values(X_sc)   # (n, p) numpy array
+shap_vals   = explainer(X_sc)               # Explanation object for waterfall/force
+
+mean_abs_shap = np.abs(shap_matrix).mean(axis=0)
+
+# ── 4. BOOTSTRAP CIs ON mean|SHAP| — 500 iterations ─────────────────────────
+# Bootstrap resamples years (with replacement) to quantify ranking uncertainty.
+# Wide / overlapping CIs mean we cannot claim a definitive feature ordering.
+
+N_BOOT = 500
+rng = np.random.default_rng(42)
+boot_mean_abs = np.zeros((N_BOOT, len(FEATURES)))
+
+for b in range(N_BOOT):
+    idx = rng.choice(len(X_sc), size=len(X_sc), replace=True)
+    X_b = X_sc.iloc[idx].reset_index(drop=True)
+    y_b = y.iloc[idx].reset_index(drop=True)
+    m_b = Ridge(alpha=best_alpha).fit(X_b, y_b)
+    exp_b = shap.LinearExplainer(m_b, X_b)
+    sv_b  = exp_b.shap_values(X_sc)          # explain full (fixed) dataset
+    boot_mean_abs[b] = np.abs(sv_b).mean(axis=0)
+
+ci_lo = np.percentile(boot_mean_abs, 2.5,  axis=0)
+ci_hi = np.percentile(boot_mean_abs, 97.5, axis=0)
+
+importance_df = pd.DataFrame({
+    'feature':       FEATURES,
+    'label':         [LABELS.get(f, f) for f in FEATURES],
+    'mean_abs_shap': mean_abs_shap,
+    'ci_lo':         ci_lo,
+    'ci_hi':         ci_hi,
+}).sort_values('mean_abs_shap', ascending=False).reset_index(drop=True)
+importance_df['rank'] = range(1, len(importance_df) + 1)
+
+# Flag pairs whose CIs overlap — we cannot claim a definitive rank difference
+importance_df['ci_overlaps_next'] = False
+for i in range(len(importance_df) - 1):
+    if importance_df.loc[i, 'ci_lo'] < importance_df.loc[i + 1, 'ci_hi']:
+        importance_df.loc[i,     'ci_overlaps_next'] = True
+        importance_df.loc[i + 1, 'ci_overlaps_next'] = True
+
+print("\nSHAP feature importance with 95% bootstrap CIs (n_boot=500):")
+print(importance_df[['rank', 'label', 'mean_abs_shap', 'ci_lo', 'ci_hi',
+                      'ci_overlaps_next']].to_string(index=False))
+
+n_overlap = importance_df['ci_overlaps_next'].sum()
+if n_overlap > 0:
+    print(f"\n⚠  {n_overlap} feature(s) have overlapping CIs with adjacent rank —"
+          " definitive ordering cannot be claimed for those pairs.")
+
+# ── 5. BEESWARM + BOOTSTRAP CI BAR ───────────────────────────────────────────
 fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-fig.suptitle('SHAP Feature Association — Sri Lanka Underemployment (2015–2024)',
-             fontsize=13, fontweight='bold')
+fig.suptitle('SHAP Analysis — Sri Lanka Underemployment (2015–2024)\n'
+             '(Ridge regression, LOOCV evaluation, n=10)',
+             fontsize=12, fontweight='bold')
 
 plt.sca(axes[0])
-shap.summary_plot(shap_matrix, X, plot_type='dot', show=False)
-axes[0].set_title('Beeswarm (association direction & magnitude)', fontsize=10)
+shap.summary_plot(shap_matrix, X_sc, feature_names=[LABELS.get(f, f) for f in FEATURES],
+                  plot_type='dot', show=False)
+axes[0].set_title('Beeswarm: direction & magnitude', fontsize=10)
 
-plt.sca(axes[1])
-shap.summary_plot(shap_matrix, X, plot_type='bar', show=False)
-axes[1].set_title('Mean |SHAP| feature importance', fontsize=10)
+# Bootstrap CI bar chart
+ax2 = axes[1]
+y_pos = np.arange(len(importance_df))
+colors = ['#EF4444' if ov else '#2563EB' for ov in importance_df['ci_overlaps_next']]
+ax2.barh(y_pos, importance_df['mean_abs_shap'], color=colors, alpha=0.75, label='Mean |SHAP|')
+ax2.errorbar(importance_df['mean_abs_shap'], y_pos,
+             xerr=[importance_df['mean_abs_shap'] - importance_df['ci_lo'],
+                   importance_df['ci_hi'] - importance_df['mean_abs_shap']],
+             fmt='none', color='black', capsize=4, linewidth=1.2)
+ax2.set_yticks(y_pos)
+ax2.set_yticklabels(importance_df['label'])
+ax2.invert_yaxis()
+ax2.set_xlabel('Mean |SHAP value|', fontsize=10)
+ax2.set_title('Feature Importance with 95% Bootstrap CIs\n'
+              '(Red = CI overlaps adjacent rank)', fontsize=10)
+ax2.grid(axis='x', alpha=0.3)
 
 plt.tight_layout()
 plt.savefig(OUTDIR / 'shap_summary_plots.png', dpi=150, bbox_inches='tight')
 plt.close()
 print("\nSaved: shap_summary_plots.png")
 
-# ── 5. WATERFALL CHART — 2022 crisis peak ─────────────────────────────────────
-# 2022 is the crisis peak year — highest underemployment + structural break
-idx_2022 = df[df['year'] == 2022].index
+# ── 6. WATERFALL — 2022 crisis peak ──────────────────────────────────────────
+idx_2022 = df[df['Year'] == 2022].index
 if len(idx_2022) > 0:
     i = idx_2022[0]
     fig, ax = plt.subplots(figsize=(10, 5))
     shap.waterfall_plot(shap_vals[i], max_display=len(FEATURES), show=False)
     ax = plt.gca()
-    ax.set_title(f'SHAP Waterfall — 2022 Crisis Peak (Underemployment = {y.iloc[i]:.1f}%)',
-                 fontsize=11, fontweight='bold')
+    ax.set_title(
+        f'SHAP Waterfall — 2022 Crisis Peak (Underemployment = {y.iloc[i]:.1f}%)\n'
+        'Illustrative: single-year explanation, not an inferential result (n=10)',
+        fontsize=10, fontweight='bold'
+    )
     plt.tight_layout()
     plt.savefig(OUTDIR / 'shap_waterfall_2022.png', dpi=150, bbox_inches='tight')
     plt.close()
     print("Saved: shap_waterfall_2022.png")
 
-# ── 6. FORCE PLOT — 2022 ──────────────────────────────────────────────────────
+# ── 7. FORCE PLOT — 2022 ─────────────────────────────────────────────────────
 if len(idx_2022) > 0:
     i = idx_2022[0]
-    base_val = explainer.expected_value
-    if isinstance(base_val, np.ndarray):
-        base_val = float(base_val[0])
+    base_val = float(explainer.expected_value
+                     if not isinstance(explainer.expected_value, np.ndarray)
+                     else explainer.expected_value[0])
     fig, ax = plt.subplots(figsize=(14, 3))
-    shap.force_plot(
-        base_val,
-        shap_matrix[i],
-        X.iloc[i],
-        matplotlib=True,
-        show=False
-    )
+    shap.force_plot(base_val, shap_matrix[i], X_sc.iloc[i],
+                    feature_names=[LABELS.get(f, f) for f in FEATURES],
+                    matplotlib=True, show=False)
     plt.title(f'SHAP Force Plot — 2022 (Underemployment = {y.iloc[i]:.1f}%)',
               fontsize=10, fontweight='bold', pad=20)
     plt.tight_layout()
@@ -139,18 +225,38 @@ if len(idx_2022) > 0:
     plt.close()
     print("Saved: shap_force_2022.png")
 
-# ── 7. DEPENDENCE PLOTS — top 4 features ──────────────────────────────────────
+# ── 8. DEPENDENCE PLOTS — top 4 features ─────────────────────────────────────
 top4 = importance_df.head(4)['feature'].tolist()
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 for ax, feat in zip(axes.flat, top4):
+    feat_idx = FEATURES.index(feat)   # dependence_plot needs int index when feature_names differ
     plt.sca(ax)
-    shap.dependence_plot(feat, shap_matrix, X, ax=ax, show=False)
-    ax.set_title(f'SHAP dependence: {feat}', fontsize=10, fontweight='bold')
+    shap.dependence_plot(feat_idx, shap_matrix, X_sc,
+                         feature_names=[LABELS.get(f, f) for f in FEATURES],
+                         ax=ax, show=False)
+    ax.set_title(f'SHAP dependence: {LABELS.get(feat, feat)}', fontsize=10, fontweight='bold')
     ax.grid(alpha=0.3)
 plt.tight_layout()
 plt.savefig(OUTDIR / 'shap_dependence_plots.png', dpi=150, bbox_inches='tight')
 plt.close()
 print("Saved: shap_dependence_plots.png")
 
-print(f"\nAll SHAP outputs saved to {OUTDIR}")
-print(f"XGBoost R² (full dataset): {r2_full:.4f}")
+# ── 9. SUMMARY PRINTOUT ───────────────────────────────────────────────────────
+print("\n" + "=" * 60)
+print("SHAP ANALYSIS RESULTS")
+print("=" * 60)
+print(f"\nModel          : Ridge regression (α={best_alpha})")
+print(f"Validation     : Leave-One-Out CV (n={len(y)})")
+print(f"LOOCV R²       : {r2_loo:.3f}")
+print(f"LOOCV MAE      : {mae_loo:.4f} pp")
+print(f"LOOCV RMSE     : {rmse_loo:.4f} pp")
+print(f"Bootstrap iters: {N_BOOT}")
+print()
+print("Feature ranking (point estimate ± 95% CI):")
+for _, row in importance_df.iterrows():
+    overlap_flag = ' ← CI overlaps adjacent rank' if row['ci_overlaps_next'] else ''
+    print(f"  {int(row['rank']):2d}. {row['label']:20s}  "
+          f"{row['mean_abs_shap']:.4f}  [{row['ci_lo']:.4f}, {row['ci_hi']:.4f}]"
+          f"{overlap_flag}")
+
+print(f"\nAll outputs saved to: {OUTDIR}")

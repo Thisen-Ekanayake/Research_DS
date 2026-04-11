@@ -20,8 +20,11 @@ import warnings
 warnings.filterwarnings('ignore')
 import os
 
-import xgboost as xgb
 import shap
+from sklearn.linear_model import Ridge, RidgeCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import LeaveOneOut
+from sklearn.metrics import r2_score, mean_squared_error
 from scipy.stats import spearmanr
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -82,24 +85,37 @@ y_qual = df['Qual_Underemployment_Rate'].astype(float)
 
 print(f"Features ({len(FEATURES)}): {[LABELS.get(f, f) for f in FEATURES]}")
 
-# ── 3. PARALLEL XGBOOST MODELS ──────────────────────────────────────────────
-params = dict(n_estimators=100, max_depth=3, learning_rate=0.1,
-              subsample=0.8, random_state=42, verbosity=0)
+# ── 3. PARALLEL RIDGE MODELS (LOOCV alpha selection) ────────────────────────
+# XGBoost on n=10 massively overfits; Ridge with LOOCV is the correct choice.
+ALPHAS = [0.01, 0.1, 1.0, 10.0, 100.0, 1000.0]
 
-model_A = xgb.XGBRegressor(**params)
-model_A.fit(X, y_hours)
+scaler = StandardScaler()
+X_sc = pd.DataFrame(scaler.fit_transform(X), columns=FEATURES, index=df.index)
 
-model_B = xgb.XGBRegressor(**params)
-model_B.fit(X, y_qual)
+rcv_A = RidgeCV(alphas=ALPHAS, scoring='neg_mean_squared_error').fit(X_sc, y_hours)
+rcv_B = RidgeCV(alphas=ALPHAS, scoring='neg_mean_squared_error').fit(X_sc, y_qual)
 
-print(f"\nModel A (hours-based) R² = {model_A.score(X, y_hours):.4f}")
-print(f"Model B (qualification) R² = {model_B.score(X, y_qual):.4f}")
+# LOOCV R² for reporting
+def loocv_r2(X_data, y_data, alpha):
+    loo = LeaveOneOut()
+    preds = np.zeros(len(y_data))
+    for tr, te in loo.split(X_data):
+        Ridge(alpha=alpha).fit(X_data.iloc[tr], y_data.iloc[tr])
+        preds[te] = Ridge(alpha=alpha).fit(X_data.iloc[tr], y_data.iloc[tr]).predict(X_data.iloc[te])
+    return r2_score(y_data, preds)
+
+model_A = Ridge(alpha=rcv_A.alpha_).fit(X_sc, y_hours)
+model_B = Ridge(alpha=rcv_B.alpha_).fit(X_sc, y_qual)
+
+print(f"\nModel A (hours-based)   α={rcv_A.alpha_},  LOOCV R²={loocv_r2(X_sc, y_hours, rcv_A.alpha_):.3f}")
+print(f"Model B (qualification) α={rcv_B.alpha_},  LOOCV R²={loocv_r2(X_sc, y_qual,  rcv_B.alpha_):.3f}")
+print("  NOTE: All R² from LOOCV — no held-out split (n=10 makes 80/20 meaningless).")
 
 # ── 4. SHAP EXTRACTION & RANKING TABLE ──────────────────────────────────────
-exp_A = shap.TreeExplainer(model_A)
-exp_B = shap.TreeExplainer(model_B)
-sv_A = exp_A.shap_values(X)
-sv_B = exp_B.shap_values(X)
+exp_A = shap.LinearExplainer(model_A, X_sc)
+exp_B = shap.LinearExplainer(model_B, X_sc)
+sv_A = exp_A.shap_values(X_sc)
+sv_B = exp_B.shap_values(X_sc)
 
 imp_A = np.abs(sv_A).mean(axis=0)
 imp_B = np.abs(sv_B).mean(axis=0)
@@ -112,9 +128,9 @@ comp = pd.DataFrame({
     'Qual |SHAP| %': imp_B_pct,
 })
 comp['Rank (Hours)'] = comp['Hours |SHAP| %'].rank(ascending=False).astype(int)
-comp['Rank (Qual)'] = comp['Qual |SHAP| %'].rank(ascending=False).astype(int)
+comp['Rank (Qual)']  = comp['Qual |SHAP| %'].rank(ascending=False).astype(int)
 comp['|Δ Rank|'] = (comp['Rank (Hours)'] - comp['Rank (Qual)']).abs().astype(int)
-comp = comp.sort_values('Rank (Hours)')
+comp = comp.sort_values('Rank (Hours)').reset_index(drop=True)
 
 print("\n── SHAP Ranking Comparison ──")
 print(comp.to_string(index=False))
@@ -122,6 +138,31 @@ print(comp.to_string(index=False))
 # Overall Spearman rho
 rho_overall, p_overall = spearmanr(comp['Rank (Hours)'], comp['Rank (Qual)'])
 print(f"\nOverall Spearman ρ = {rho_overall:.3f} (p = {p_overall:.4f})")
+
+# ── BOOTSTRAP CIs ON OVERALL SPEARMAN (500 iterations) ──────────────────────
+N_BOOT = 500
+rng = np.random.default_rng(42)
+boot_rho = np.zeros(N_BOOT)
+
+for b in range(N_BOOT):
+    idx = rng.choice(len(X_sc), size=len(X_sc), replace=True)
+    Xb = X_sc.iloc[idx].reset_index(drop=True)
+    yb_h = y_hours.iloc[idx].reset_index(drop=True)
+    yb_q = y_qual.iloc[idx].reset_index(drop=True)
+
+    mA_b = Ridge(alpha=rcv_A.alpha_).fit(Xb, yb_h)
+    mB_b = Ridge(alpha=rcv_B.alpha_).fit(Xb, yb_q)
+    eA_b = shap.LinearExplainer(mA_b, Xb)
+    eB_b = shap.LinearExplainer(mB_b, Xb)
+    sv_A_b = np.abs(eA_b.shap_values(X_sc)).mean(axis=0)
+    sv_B_b = np.abs(eB_b.shap_values(X_sc)).mean(axis=0)
+    rk_A_b = pd.Series(sv_A_b).rank(ascending=False)
+    rk_B_b = pd.Series(sv_B_b).rank(ascending=False)
+    boot_rho[b], _ = spearmanr(rk_A_b, rk_B_b)
+
+rho_ci_lo = np.percentile(boot_rho, 2.5)
+rho_ci_hi = np.percentile(boot_rho, 97.5)
+print(f"Bootstrap 95% CI on ρ: [{rho_ci_lo:.3f}, {rho_ci_hi:.3f}]  (n_boot={N_BOOT})")
 
 # ── 5. SUB-PERIOD SPEARMAN ──────────────────────────────────────────────────
 periods = {
@@ -136,10 +177,12 @@ for label, (y_start, y_end) in periods.items():
     sub = df[mask]
     n_sub = len(sub)
 
-    if n_sub < 3:
+    # n<5 yields zero or near-zero degrees of freedom for rank correlation —
+    # any p-value is meaningless; treat as illustrative only.
+    if n_sub < 5:
         subperiod_results.append({
             'Period': label, 'n': n_sub, 'rho': np.nan, 'p': np.nan,
-            'note': 'Insufficient (n<3)'
+            'illustrative_only': True
         })
         continue
 
@@ -152,12 +195,14 @@ for label, (y_start, y_end) in periods.items():
 
     rho_sp, p_sp = spearmanr(rank_h, rank_q)
     subperiod_results.append({
-        'Period': label, 'n': n_sub, 'rho': rho_sp, 'p': p_sp, 'note': ''
+        'Period': label, 'n': n_sub, 'rho': rho_sp, 'p': p_sp,
+        'illustrative_only': False
     })
 
 sp_df = pd.DataFrame(subperiod_results)
 print("\n── Sub-Period Spearman ──")
 print(sp_df.to_string(index=False))
+print("  ⚠ Rows with n<5 are illustrative only — p-values not reported.")
 
 # ── 6. QUALIFICATION-BASED TREND ────────────────────────────────────────────
 years = df['Year'].values.astype(float)
@@ -276,7 +321,7 @@ print("Saved: sensitivity_qual_trend.png")
 
 # ── 8. LATEX TABLES ──────────────────────────────────────────────────────────
 
-# SHAP comparison table
+# SHAP comparison table — now includes bootstrap CI on overall Spearman
 with open(os.path.join(TAB_DIR, 'sensitivity_shap_table.tex'), 'w') as f:
     f.write("\\begin{table}[ht]\n")
     f.write("\\caption{SHAP Feature Importance: Hours-Based vs Qualification-Based}\n")
@@ -294,32 +339,42 @@ with open(os.path.join(TAB_DIR, 'sensitivity_shap_table.tex'), 'w') as f:
                 f"{int(row['Rank (Hours)'])} & {row['Qual |SHAP| %']:.1f} & "
                 f"{int(row['Rank (Qual)'])} & {int(row['|Δ Rank|'])}\\\\\n")
     f.write("\\midrule\n")
-    f.write(f"\\multicolumn{{6}}{{l}}{{\\scriptsize Spearman $\\rho = {rho_overall:.3f}$ "
-            f"($p = {p_overall:.3f}$). $\\dagger$Rank shift $\\geq 2$.}}\\\\\n")
+    f.write(f"\\multicolumn{{6}}{{l}}{{\\scriptsize "
+            f"Overall Spearman $\\rho = {rho_overall:.3f}$, "
+            f"95\\% bootstrap CI [{rho_ci_lo:.3f}, {rho_ci_hi:.3f}] ($n_{{\\text{{boot}}}}=500$). "
+            f"$\\dagger$Rank shift $\\geq 2$. Ridge + LOOCV, $n=10$.}}\\\\\n")
     f.write("\\bottomrule\n")
     f.write("\\end{tabular}\n")
     f.write("\\end{table}\n")
 print("Saved: sensitivity_shap_table.tex")
 
 # Sub-period Spearman table
+# Rows with n<5 have zero effective degrees of freedom; p-values are omitted
+# and results are explicitly marked as illustrative only.
 with open(os.path.join(TAB_DIR, 'sensitivity_spearman.tex'), 'w') as f:
     f.write("\\begin{table}[ht]\n")
     f.write("\\caption{Sub-Period Definition Agreement (Spearman $\\rho$)}\n")
     f.write("\\label{tab:spearman_subperiod}\n")
     f.write("\\footnotesize\n")
-    f.write("\\begin{tabular}{lccc}\n")
+    f.write("\\begin{tabular}{lccl}\n")
     f.write("\\toprule\n")
-    f.write("\\textbf{Period} & \\textbf{n} & \\textbf{$\\rho$} & \\textbf{$p$}\\\\\n")
+    f.write("\\textbf{Period} & \\textbf{n} & \\textbf{$\\rho$} & \\textbf{Note}\\\\\n")
     f.write("\\midrule\n")
     for _, row in sp_df.iterrows():
         period_clean = row['Period'].replace('\n', ' ')
-        if np.isnan(row['rho']):
-            f.write(f"{period_clean} & {int(row['n'])} & -- & -- \\\\\n")
+        if row['illustrative_only']:
+            f.write(f"{period_clean} & {int(row['n'])} & -- & "
+                    "\\textit{Illustrative only — $n < 5$, no inference}\\\\\n")
         else:
-            f.write(f"{period_clean} & {int(row['n'])} & {row['rho']:.3f} & {row['p']:.3f}\\\\\n")
+            f.write(f"{period_clean} & {int(row['n'])} & {row['rho']:.3f} & \\\\\n")
     f.write("\\midrule\n")
-    f.write(f"Overall & {len(df)} & {rho_overall:.3f} & {p_overall:.3f}\\\\\n")
+    f.write(f"Overall & {len(df)} & {rho_overall:.3f} & "
+            f"95\\% CI [{rho_ci_lo:.3f}, {rho_ci_hi:.3f}]\\\\\n")
     f.write("\\bottomrule\n")
+    f.write("\\multicolumn{4}{l}{\\scriptsize "
+            "Sub-period rows with $n<5$ report no $p$-value: at $n=3$ the rank "
+            "correlation has zero degrees of freedom and any $p$-value is "
+            "uninformative. Results are descriptive only.}\n")
     f.write("\\end{tabular}\n")
     f.write("\\end{table}\n")
 print("Saved: sensitivity_spearman.tex")

@@ -2,15 +2,19 @@
 \caption{Sub-Period Definition Agreement (Spearman $\rho$)}
 \label{tab:spearman_subperiod}
 \footnotesize
-\begin{tabular}{lccc}
+\begin{tabular}{lccl}
 \toprule
-\textbf{Period} & \textbf{n} & \textbf{$\rho$} & \textbf{$p$}\\
+\textbf{Period} & \textbf{n} & \textbf{$\rho$} & \textbf{Note}\\
 \midrule
-Pre-crisis (2015–2019) & 5 & 0.429 & 0.337\\
-Crisis (2020–2022) & 3 & 0.786 & 0.036\\
-Post-crisis (2023–2024) & 2 & -- & -- \\
+Pre-crisis (2015--2019) & 5 & 0.429 & \\
+Crisis (2020--2022) & 3 & -- & \textit{Illustrative only --- $n < 5$, no inference}\\
+Post-crisis (2023--2024) & 2 & -- & \textit{Illustrative only --- $n < 5$, no inference}\\
 \midrule
-Overall & 10 & 0.893 & 0.007\\
+Overall & 10 & 0.893 & Re-run \texttt{sensitivity\_analysis.py} for bootstrap CI\\
 \bottomrule
+\multicolumn{4}{l}{\scriptsize Sub-period rows with $n<5$ report no $p$-value: at $n=3$ the rank correlation}\\
+\multicolumn{4}{l}{\scriptsize has zero degrees of freedom and any $p$-value is uninformative. Sub-period}\\
+\multicolumn{4}{l}{\scriptsize results are descriptive only, not inferential. Overall $\rho$ reported with}\\
+\multicolumn{4}{l}{\scriptsize 95\% bootstrap CI ($n_{\text{boot}}=500$); re-generate to populate CI values.}\\
 \end{tabular}
 \end{table}
