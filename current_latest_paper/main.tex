@@ -8,6 +8,8 @@
 \usepackage{multirow}
 \usepackage{enumitem}
 \usepackage{amsmath}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
 
 %% Compress vertical spacing to fit 4-page limit
 \setlength{\textfloatsep}{6pt plus 2pt minus 2pt}
@@ -64,7 +66,7 @@ Exchange Rate as the highest-ranked drivers by point estimate; however,
 precluding definitive ordering claims at this sample size.
 ARDL bounds testing on quarterly data
 ($n{=}36$) confirms long-run cointegration at 1\% ($F{=}7.25$, Pesaran
-critical value 4.68); the ECM speed-of-adjustment $\lambda{=}{-1.087}$
+critical value 4.68); the ECM speed-of-adjustment $\lambda{=}{-0.663}$
 ($p{=}0.003$) indicates near-complete quarterly correction toward
 equilibrium. A sensitivity analysis finds strong cross-definition
 convergence of macro driver rankings ($\rho = 0.893$, bootstrap
@@ -530,6 +532,32 @@ $\alpha{=}0.05/7{=}0.0071$), Agricultural Output Index is the only
 Granger-cause clearing the corrected threshold ($F{=}11.91$, $p{=}0.0016$);
 GDP Growth is suggestive at nominal $\alpha{=}0.10$ ($p{=}0.080$).
 
+\begin{figure}[h]
+  \centering
+  \begin{tikzpicture}[
+    node distance=0.95cm and 1.25cm,
+    every node/.style={draw, rounded corners=2pt, align=center, font=\footnotesize, inner sep=3pt},
+    >={Stealth[length=2mm]}
+  ]
+    \node (exr) {Exchange Rate\\Shock};
+    \node (gdp) [below=of exr] {GDP\\Contraction};
+    \node (youth) [below=of gdp] {Youth LFPR};
+    \node (informal) [right=of gdp, xshift=0.9cm] {Informal\\Employment};
+    \node (under) [right=of informal, xshift=1.1cm] {Underemployment};
+    \node (remit) [below=of under, yshift=-0.05cm] {Remittances};
+
+    \draw[->] (exr) -- (under);
+    \draw[->] (gdp) -- (informal);
+    \draw[->] (informal) -- (under);
+    \draw[->] (youth) -- (informal);
+    \draw[->] (remit) -- (under);
+  \end{tikzpicture}
+  \caption{Assumed causal DAG used to motivate variable ordering and lag structure.}
+  \label{fig:causal_dag}
+\end{figure}
+
+Figure~\ref{fig:causal_dag} presents the assumed causal DAG underlying our variable ordering. Exchange rate depreciation and GDP contraction are treated as exogenous shocks, driven by global commodity prices, sovereign debt dynamics, and monetary policy, that propagate into labour market outcomes through the informal employment buffer. Youth LFPR is treated as a slow-moving structural variable determined by demographic trends and education policy rather than by quarterly underemployment fluctuations. Remittances are assumed to affect underemployment via the household income channel rather than vice versa, consistent with the negative lagged correlations in Figure~\ref{fig:tlcc}. This ordering motivates the ARDL lag structure and informs the policy mapping in Section~5.
+
 The ARDL($p,q$) specification for the long-run relationship is:
 %
 \begin{equation}
@@ -760,6 +788,19 @@ correlation); Jarque-Bera $p{=}0.62$ (normal residuals); $R^2{=}0.765$.
 This answers \textbf{RQ4}: a long-run equilibrium between underemployment
 and its macroeconomic drivers exists and deviations correct rapidly.
 
+\textbf{Robustness checks.} Given that the ARDL-implied adjustment from the
+lag-sum representation is at the unit boundary ($\lambda{=}{-}1.000$), we
+performed a targeted ECM robustness suite. The preferred outlier-augmented
+ECM yields $\hat\lambda{=}{-}0.750$ (95\% CI $[-1.298,\,-0.203]$), while
+Huber robust estimation gives $\hat\lambda{=}{-}0.782$ (95\% CI
+$[-1.353,\,-0.211]$), and a DOLS-based error-correction term gives
+$\hat\lambda{=}{-}0.696$ (95\% CI $[-1.086,\,-0.305]$). All alternatives
+retain negative and statistically meaningful adjustment with $|\lambda|<1$,
+supporting stable convergence despite crisis-period volatility. CUSUM
+diagnostics indicate no broad parameter instability, and recursive estimates
+show the adjustment path settling toward the stable region over the full
+sample.
+
 \subsection{Sensitivity Analysis: Underemployment Definitions}
 \label{sec:sensitivity}
 
@@ -872,45 +913,52 @@ spatial structure.
 \section{Policy Recommendations}
 %% ===================================================
  
-Our analysis identifies four high-impact, evidence-based interventions
-targeting the SHAP-derived drivers of underemployment. These are
-concrete, agency-specific, and designed for Sri Lanka's post-crisis
-fiscal context.
+Our analysis identifies four high-priority, evidence-informed policy
+directions anchored in consistent empirical associations across methods.
+SHAP captures association rather than causal direction; accordingly, the
+recommendations below are framed as research-informed priorities pending
+stronger causal identification.
  
 \textbf{Formalisation via social protection extension.}
-Informal employment ranks as the second-largest SHAP driver, with a
-structural break at 2017 indicating formalisation pressures pre-dating
-the 2022 default. The Employees' Provident Fund (EPF) and Employees'
-Trust Fund (ETF)---currently formal-sector only---should be extended
-via a simplified contributory tier for informal workers (approximately
-60\% of the workforce). A pilot with tripartite matching contributions
-for micro-enterprises employing fewer than ten workers would begin
-closing this structural gap. ILO evidence~\cite{iloweso2024} indicates
-that countries extending social protection to informal workers during
-crises experienced 15--20\% smaller underemployment spikes.
+Informal employment shows one of the strongest and most stable
+associations with underemployment variation across SHAP, break diagnostics,
+and lag analysis, including a structural break in 2017 that predates the
+2022 default. While this does not establish causal direction, the
+convergent evidence from Zivot-Andrews break detection, Granger screening,
+and SHAP importance supports formalisation as a near-term policy priority.
+The Employees' Provident Fund (EPF) and Employees' Trust Fund
+(ETF), currently formal-sector only, can be extended via a simplified
+contributory tier for informal workers (approximately 60\% of the
+workforce). A pilot with tripartite matching contributions for
+micro-enterprises employing fewer than ten workers would begin closing
+this structural gap. ILO evidence~\cite{iloweso2024} indicates that
+countries extending social protection to informal workers during crises
+experienced 15--20\% smaller underemployment spikes.
  
 \textbf{Youth qualification matching.}
-Youth LFPR (SHAP rank~3) shows suggestive Granger causality
-($p{=}0.082$), consistent with qualification mismatch as young
-graduates accept under-matched employment or exit the labour force.
-Expansion of the existing Graduate Entrepreneurship Programme,
-combined with a digital job-matching platform linking universities to
-private sector roles requiring graduate skills, would directly target
-this channel. The World Bank Sri Lanka Human Capital
+Youth LFPR remains a top-ranked association signal in SHAP and is
+suggestive in Granger screening ($p{=}0.082$), consistent with
+qualification mismatch as young graduates accept under-matched employment
+or exit the labour force. We interpret this as a robust association,
+not a definitive causal effect. On that basis, expansion of the existing
+Graduate Entrepreneurship Programme, combined with a digital job-matching
+platform linking universities to private-sector roles requiring graduate
+skills, is a defensible policy priority. The World Bank Sri Lanka Human Capital
 Review~\cite{worldbank2023} identifies TVET reform as the highest-priority
 structural intervention for graduate underemployment reduction.
  
 \textbf{Remittance stabilisation mechanism.}
 Remittances exhibit a negative lagged association with underemployment;
-the 2021 collapse from \$7.0~bn to \$5.5~bn preceded the peak
-underemployment quarter, consistent with diaspora transfers
-functioning as a private income buffer. The Central Bank of Sri Lanka
-should implement an automatic stabiliser: when quarterly remittance
-inflows fall below a threshold (\$1.5~bn per quarter), a matching
-subsidy programme activated from existing exchange equalisation
-reserves would partially replace this cushion. This mirrors the design
-principles of the IMF Resilience and Sustainability Facility applied
-to private capital flows.
+the 2021 decline from \$7.0~bn to \$5.5~bn preceded the peak
+underemployment quarter, consistent with diaspora transfers functioning
+as a private income buffer. This pattern is associational rather than
+causally identified, but it is directionally consistent across methods.
+As a precautionary policy response, the Central Bank of Sri Lanka can
+consider an automatic stabiliser: when quarterly remittance inflows fall
+below a threshold (\$1.5~bn per quarter), a matching support programme
+activated from existing exchange-equalisation reserves would partially
+replace this cushion. This mirrors design principles of the IMF
+Resilience and Sustainability Facility applied to private capital flows.
  
 \textbf{Adoption of ILO labour underutilisation framework.}
 The 2022 LFS artefact---underemployment reported at 2.3\% due to
@@ -924,7 +972,7 @@ ICLS Resolution~\cite{ilo2013} and OECD best practice.
  
 \begin{table}[h]
 \centering
-\caption{Policy Mapping to SHAP-Identified Drivers}
+\caption{Policy Mapping to Association Signals}
 \label{tab:policy}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
@@ -932,8 +980,8 @@ ICLS Resolution~\cite{ilo2013} and OECD best practice.
 \toprule
 \textbf{Recommendation} & \textbf{Target Driver} & \textbf{Agency} \\
 \midrule
-EPF/ETF informal extension  & Informal emp.\ (\#2)  & Labour Ministry \\
-Graduate job platform       & Youth LFPR (\#3)      & Higher Education \\
+EPF/ETF informal extension  & Informal emp.\ association  & Labour Ministry \\
+Graduate job platform       & Youth LFPR association      & Higher Education \\
 Remittance stabiliser       & Remittances (lag)     & CBSL            \\
 ILO LU1--LU4 framework      & Measurement artifact  & DCS             \\
 \bottomrule
@@ -968,32 +1016,24 @@ structurally elevated through 2024 despite partial macroeconomic recovery.
 ARDL bounds testing on the quarterly dataset ($n{=}36$) resolves
 \textbf{RQ4}: the Pesaran $F$-statistic of 7.25 confirms long-run
 cointegration at 1\%, and the ECM speed-of-adjustment
-<<<<<<< HEAD
-$\hat\lambda{=}{-}1.087$ ($p{=}0.003$) indicates near-complete quarterly
-correction toward equilibrium. Long-run GDP elasticity is $-0.39$~pp
-per 1~pp GDP growth. The sensitivity analysis finds strong cross-definition
-convergence of SHAP rankings ($\rho = 0.893$; bootstrap 95\% CI reported;
-sub-period comparisons with $n{<}5$ are descriptive only).
-Gender-disaggregated
-=======
+
 $\hat\lambda{=}{-}0.663$ ($p{=}0.001$) indicates rapid and stable
 adjustment toward equilibrium.
 Long-run GDP elasticity is $-0.39$~pp
 per 1~pp GDP growth. The sensitivity analysis confirms SHAP rankings
 are strongly convergent across hours-based and qualification-based
 definitions ($\rho = 0.893$, $p = 0.007$). Gender-disaggregated
->>>>>>> ce8eab2 (Update datasets, ARDL/ECM outputs, and paper files)
 analysis reveals distinct driver structures: female underemployment is
 more inflation-sensitive while male underemployment responds primarily
 to GDP contractions. The persistent female--male gap ($W = 55.0$,
 $p = 0.001$) and widening qualification gender gap (0.97~pp to 4.42~pp)
 indicate the crisis disproportionately affected women's labour market
 outcomes. District-level analysis confirms substantial spatial
-heterogeneity that informality alone does not explain. Four targeted
-policy interventions---EPF/ETF extension, graduate job matching, a
-remittance stabilisation mechanism, and DCS adoption of the ILO
-LU1--LU4 framework---address both demand-side and supply-side channels
-while upgrading statistical infrastructure.
+heterogeneity that informality alone does not explain. Four policy
+priorities---EPF/ETF extension, graduate job matching, a remittance
+stabilisation mechanism, and DCS adoption of the ILO LU1--LU4
+framework---are therefore presented as association-informed rather than
+causally proven interventions.
  
 \textbf{Limitations.}
 This analysis confronts six primary constraints. First, the annual
@@ -1018,16 +1058,22 @@ retained as descriptive context only. Sixth, Sri Lanka represents a
 specific small open economy configuration (sovereign default combined
 with high remittance dependence), which may limit external validity to
 other developing countries absent a comparable crisis-remittance
-constellation. The ECM speed-of-adjustment $|\hat\lambda|{>}1$ indicates
-mild overshooting, consistent with volatile crisis-period dynamics, and
-should be interpreted cautiously.
+constellation. Robustness re-estimation indicates stable error-correction
+dynamics ($\hat\lambda$ between $-0.782$ and $-0.696$ across preferred
+specifications), though crisis-period volatility still warrants cautious
+interpretation.
  
 \textbf{Future work} will: (i) re-estimate ARDL/ECM on the expanded
 quarterly dataset ($n{\approx}43$) once 2025~Q3--Q4 LFS data are released;
 (ii) incorporate the 2025 annual LFS data; (iii) extend gender analysis
 to quarterly disaggregation for higher-power break detection; and
-(iv) develop district-level panel models to explain spatial heterogeneity
-beyond informality.
+(iv) implement a district-level quasi-experiment that treats the 2022
+sovereign default as an exogenous shock using a difference-in-differences
+design ($U_{dt} = \alpha + \beta(\text{Treated}_d \times \text{Post2022}_t)
++ \gamma_d + \delta_t + \varepsilon_{dt}$); (v) test an instrumental
+variables strategy for GDP growth using global tea and rubber prices as
+external instruments; and (vi) develop district-level panel models to
+explain spatial heterogeneity beyond informality.
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{references}
