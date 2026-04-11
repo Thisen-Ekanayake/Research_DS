@@ -5,11 +5,11 @@ Error Correction Model estimation following confirmed cointegration
 (ARDL bounds F=7.25 > 1% critical value 4.68).
 
 Approach: ARDL-based ECM reparameterisation
-  1. Extract long-run coefficients from ARDL(3,1,1,2,0).
-  2. Build the Error Correction Term (ECT).
-  3. Re-estimate the parsimonious ECM in first differences.
-  4. Report speed-of-adjustment, long-run level equations, diagnostics.
-  5. Export LaTeX tables ready for paper.
+    1. Select lag order using BIC (parsimony in small quarterly samples).
+    2. Include centered seasonal dummies and a 2022 crisis pulse.
+    3. Build the Error Correction Term (ECT) from ARDL long-run ratios.
+    4. Re-estimate a parsimonious ECM in first differences.
+    5. Report speed-of-adjustment, diagnostics, and LaTeX-ready tables.
 
 Reference: Pesaran, Shin & Smith (2001), J. Applied Econometrics.
 """
@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 
 import statsmodels.formula.api as smf
 from statsmodels.tsa.ardl import ARDL
+from statsmodels.tsa.ardl import ardl_select_order
 from statsmodels.regression.linear_model import OLS
 from statsmodels.tools import add_constant
 from statsmodels.stats.stattools import durbin_watson
@@ -40,10 +41,6 @@ os.makedirs(OUT, exist_ok=True)
 
 DEPVAR     = "Underemployment_Rate"
 PREDICTORS = ["GDP_Growth_Rate", "Inflation_Rate", "Youth_LFPR", "Remittances_USD"]
-# ARDL order: will be re-selected with seasonal dummies included
-AR_LAGS    = [1, 2, 3]
-DL_ORDER   = {"GDP_Growth_Rate": 1, "Inflation_Rate": 1,
-              "Youth_LFPR": 2, "Remittances_USD": 0}
 
 def sep(title=""):
     print("\n" + "=" * 70)
@@ -60,12 +57,16 @@ def load():
     df = df.dropna(subset=["GDP_Growth_Rate", "Inflation_Rate"]).reset_index(drop=True)
     df.index = pd.PeriodIndex(df["Year"].astype(str) + df["Quarter"], freq="Q")
 
-    # Add quarterly seasonal dummies (Q2, Q3, Q4; Q1 is the reference)
-    # Quarterly underemployment has strong seasonal patterns that must be
-    # controlled for before estimating the macro long-run relationship.
-    df["Q2"] = (df["Quarter"] == "Q2").astype(int)
-    df["Q3"] = (df["Quarter"] == "Q3").astype(int)
-    df["Q4"] = (df["Quarter"] == "Q4").astype(int)
+    # Centered seasonal dummies (Q1, Q2, Q3; Q4 baseline)
+    # Centering avoids shifting the deterministic level relationship.
+    q_dummies = pd.get_dummies(df.index.quarter, prefix="Q", drop_first=False)
+    q_dummies = q_dummies.drop(columns=["Q_4"]).astype(float)
+    q_dummies = q_dummies - q_dummies.mean()
+    q_dummies.columns = ["Q1_c", "Q2_c", "Q3_c"]
+    df = pd.concat([df, q_dummies.set_index(df.index)], axis=1)
+
+    # Crisis pulse for sovereign-default shock year.
+    df["Crisis_2022"] = (df.index.year == 2022).astype(int)
     return df
 
 
@@ -73,21 +74,36 @@ def load():
 # Step A: Re-fit ARDL and compute long-run coefficients
 # ---------------------------------------------------------------------------
 def compute_longrun(df):
-    sep("PART A — LONG-RUN COEFFICIENTS FROM ARDL (with seasonal dummies)")
+    sep("PART A — LONG-RUN COEFFICIENTS FROM ARDL (BIC + centered seasonal + crisis)")
 
     y    = df[DEPVAR]
-    # Include seasonal dummies as exogenous deterministics alongside macro vars
-    SEAS  = ["Q2", "Q3", "Q4"]
-    ALL_EXOG = PREDICTORS + SEAS
-    exog = df[ALL_EXOG]
+    # Include centered seasonal controls and crisis pulse alongside macro vars
+    SEAS = ["Q1_c", "Q2_c", "Q3_c"]
+    DET  = ["Crisis_2022"]
+    exog = df[PREDICTORS]
+    fixed = df[SEAS + DET]
 
-    # Use ARDL(1,1,1,1,0) with seasonal dummies — simpler spec after seasonal control
-    # The seasonal dummies absorb the oscillatory AR dynamics, so lower AR order needed
-    model = ARDL(y, [1], exog,
-                 {**{v: DL_ORDER[v] for v in PREDICTORS},
-                  **{"Q2": 0, "Q3": 0, "Q4": 0}},
-                 trend="c")
-    res   = model.fit()
+    print("Selecting ARDL lag order via BIC (maxlag=4, maxorder=2)...")
+    try:
+        sel = ardl_select_order(
+            y,
+            maxlag=4,
+            exog=exog,
+            maxorder=2,
+            ic="bic",
+            trend="c",
+            fixed=fixed,
+        )
+        model = sel.model
+        ardl_order = str(getattr(sel, "ardl_order", getattr(sel, "order", "auto")))
+        print(f"  BIC-selected order: ARDL{ardl_order}")
+    except Exception as e:
+        print(f"BIC selection failed ({e}). Falling back to ARDL(1,1,1,1,1,0,0,0,0).")
+        fixed_dl = {v: 1 for v in PREDICTORS}
+        model = ARDL(y, 1, exog, fixed_dl, trend="c", fixed=fixed)
+        ardl_order = "fallback"
+
+    res = model.fit()
     p     = res.params
 
     print("\nARDL model with seasonal dummies — parameter estimates:")
@@ -97,16 +113,18 @@ def compute_longrun(df):
     }).to_string())
 
     # Long-run level: set all Δ terms to zero, U_t = U_{t-1} = U*
-    # Seasonal dummies average to zero in long-run (balanced panels)
-    # → θ_x = Σβ_x / (1 - φ₁)
-
-    phi_sum  = p.get(f"{DEPVAR}.L1", 0)
+    # Centered seasonal dummies average to zero in long-run.
+    dep_lag_terms = [k for k in p.index if k.startswith(f"{DEPVAR}.L")]
+    phi_sum = sum(p[k] for k in dep_lag_terms)
+    dep_lag_count = 0
+    if dep_lag_terms:
+        dep_lag_count = max(int(k.split(".L")[-1]) for k in dep_lag_terms)
     denom    = 1 - phi_sum
     alpha_lr = p["const"] / denom
 
-    print(f"\n  AR coefficient φ₁ = {phi_sum:.4f}")
-    print(f"  Denominator (1-φ₁) = {denom:.4f}")
-    print(f"  Speed-of-adjustment λ = {phi_sum - 1:.4f}  (= φ₁ - 1, should be in (-1,0))")
+    print(f"\n  AR lag sum Σφ = {phi_sum:.4f}")
+    print(f"  Denominator (1-Σφ) = {denom:.4f}")
+    print(f"  Implied λ = {phi_sum - 1:.4f}  (= Σφ - 1)")
 
     lr = {}
     for var in PREDICTORS:
@@ -134,18 +152,18 @@ def compute_longrun(df):
     print()
     print(lr_df.to_string(index=False))
 
-    # Speed-of-adjustment from ARDL level term = φ₁ - 1
+    # Speed-of-adjustment from ARDL AR-lag sum = Σφ - 1
     soa   = phi_sum - 1
     soa_p = res.pvalues.get(f"{DEPVAR}.L1", np.nan)
-    print(f"  λ (from ARDL L1 coef) = {soa:.4f}  p={soa_p:.4f}")
+    print(f"  λ (from ARDL lag sum) = {soa:.4f}  p={soa_p:.4f}")
 
-    return res, lr, soa, alpha_lr
+    return res, lr, soa, alpha_lr, ardl_order, dep_lag_count
 
 
 # ---------------------------------------------------------------------------
 # Step B: Construct ECT and estimate parsimonious ECM
 # ---------------------------------------------------------------------------
-def estimate_ecm(df, lr, alpha_lr):
+def estimate_ecm(df, lr, alpha_lr, dep_lag_count):
     sep("PART B — PARSIMONIOUS ECM IN FIRST DIFFERENCES")
 
     # Construct ECT: U_{t-1} - α_lr - Σθ_x * X_{t-1}
@@ -162,21 +180,35 @@ def estimate_ecm(df, lr, alpha_lr):
     df2["dYouth"]   = df2["Youth_LFPR"].diff()
     df2["dRemit"]   = df2["Remittances_USD"].diff()
 
-    # Lagged differences of dep. var (from ARDL AR order = 3)
+    # Candidate lagged differences of dep. var; included adaptively below.
     df2["dU_L1"] = df2["dU"].shift(1)
     df2["dU_L2"] = df2["dU"].shift(2)
 
-    df2_clean = df2.dropna(subset=["ECT","dU","dGDP","dInfl","dYouth","dRemit","dU_L1","dU_L2"])
+    # Add centered seasonal controls and crisis pulse to short-run dynamics.
+    df2["Q1_c"] = df["Q1_c"]
+    df2["Q2_c"] = df["Q2_c"]
+    df2["Q3_c"] = df["Q3_c"]
+    df2["Crisis_2022"] = df["Crisis_2022"]
+
+    # Parsimonious ECM formula: include ΔU lags implied by ARDL order p-1.
+    rhs_terms = ["ECT", "dGDP", "dInfl", "dYouth", "dRemit", "Crisis_2022", "Q1_c", "Q2_c", "Q3_c"]
+    short_run_lags = max(0, dep_lag_count - 1)
+    if short_run_lags >= 1:
+        rhs_terms.append("dU_L1")
+    if short_run_lags >= 2:
+        rhs_terms.append("dU_L2")
+
+    required_cols = ["ECT", "dU", "dGDP", "dInfl", "dYouth", "dRemit", "Crisis_2022", "Q1_c", "Q2_c", "Q3_c"]
+    if "dU_L1" in rhs_terms:
+        required_cols.append("dU_L1")
+    if "dU_L2" in rhs_terms:
+        required_cols.append("dU_L2")
+    df2_clean = df2.dropna(subset=required_cols)
     n = len(df2_clean)
     print(f"  ECM sample: n={n} observations")
+    print(f"  Included ΔU lags in ECM: {short_run_lags}")
 
-    # Add seasonal dummies to ECM (they absorb seasonal shifts in ΔU)
-    df2["Q2"] = df["Q2"]
-    df2["Q3"] = df["Q3"]
-    df2["Q4"] = df["Q4"]
-
-    # Parsimonious ECM formula
-    formula = ("dU ~ ECT + dU_L1 + dU_L2 + dGDP + dInfl + dYouth + dRemit + Q2 + Q3 + Q4 - 1")
+    formula = "dU ~ " + " + ".join(rhs_terms)
     ecm_res = smf.ols(formula, data=df2_clean).fit(cov_type="HC3")
 
     print("\n" + "─"*70)
@@ -234,9 +266,16 @@ def ecm_diagnostics(ecm_res, df2_clean):
     print(f"  Durbin-Watson           : {dw:.4f}  (2.0 = no autocorrelation)")
 
     # Breusch-Pagan heteroskedasticity
-    X_for_bp = add_constant(df2_clean[["ECT","dGDP","dInfl","dYouth","dRemit","dU_L1","dU_L2"]])
+    bp_cols = ["ECT", "dGDP", "dInfl", "dYouth", "dRemit", "Crisis_2022", "Q1_c", "Q2_c", "Q3_c"]
+    if "dU_L1" in df2_clean.columns and df2_clean["dU_L1"].notna().any():
+        bp_cols.append("dU_L1")
+    if "dU_L2" in df2_clean.columns and df2_clean["dU_L2"].notna().any():
+        bp_cols.append("dU_L2")
+    X_for_bp = add_constant(df2_clean[bp_cols])
+    X_for_bp = X_for_bp.replace([np.inf, -np.inf], np.nan).dropna()
+    resid_bp = resid.loc[X_for_bp.index]
     try:
-        bp_stat, bp_p, _, _ = het_breuschpagan(resid, X_for_bp)
+        bp_stat, bp_p, _, _ = het_breuschpagan(resid_bp, X_for_bp)
         print(f"  Breusch-Pagan (hetero) : stat={bp_stat:.4f}  p={bp_p:.4f}  "
               f"({'reject' if bp_p < 0.05 else 'no reject'} homoskedasticity)")
     except Exception as e:
@@ -283,13 +322,13 @@ def ecm_diagnostics(ecm_res, df2_clean):
 # ---------------------------------------------------------------------------
 # Step D: Export LaTeX tables for paper
 # ---------------------------------------------------------------------------
-def export_latex(lr, soa, ecm_res):
+def export_latex(lr, soa, ecm_res, ardl_order):
     sep("PART D — LATEX TABLES FOR PAPER")
 
     # Table 1: Long-run coefficients
     lr_lines = [
         r"\begin{table}[h]",
-        r"\caption{Long-run level coefficients from ARDL(3,1,1,2,0). Denominator",
+        rf"\caption{{Long-run level coefficients from ARDL({ardl_order}) selected by BIC. Denominator",
         r"  $(1-\hat\phi_1-\hat\phi_2-\hat\phi_3)$ used to scale lag-sum ratios.}",
         r"\label{tab:ardl_longrun}",
         r"\footnotesize",
@@ -341,8 +380,12 @@ def export_latex(lr, soa, ecm_res):
         "dInfl":  r"$\Delta\text{Inflation}$",
         "dYouth": r"$\Delta\text{Youth LFPR}$",
         "dRemit": r"$\Delta\text{Remittances}$",
+        "Crisis_2022": r"Crisis 2022 pulse",
+        "Q1_c": r"Centered Q1 dummy",
+        "Q2_c": r"Centered Q2 dummy",
+        "Q3_c": r"Centered Q3 dummy",
     }
-    for var in ["ECT","dU_L1","dU_L2","dGDP","dInfl","dYouth","dRemit"]:
+    for var in ["ECT","dU_L1","dU_L2","dGDP","dInfl","dYouth","dRemit","Crisis_2022","Q1_c","Q2_c","Q3_c"]:
         if var not in ecm_res.params:
             continue
         c = ecm_res.params[var]
@@ -386,13 +429,13 @@ def export_latex(lr, soa, ecm_res):
 # ---------------------------------------------------------------------------
 # Step E: Impulse response (approximate — plot ECT path after 1-unit shock)
 # ---------------------------------------------------------------------------
-def plot_ecm_impulse(soa):
+def plot_ecm_impulse(lambda_ecm):
     sep("PART E — MEAN REVERSION PROFILE (ECT impulse)")
 
     # After a 1 percentage-point positive shock to underemployment,
     # how fast does it revert to equilibrium?
     quarters = np.arange(0, 21)
-    base = 1 + soa
+    base = 1 + lambda_ecm
     path = base ** quarters
 
     if 0 < base < 1:
@@ -413,7 +456,7 @@ def plot_ecm_impulse(soa):
     ax.set_ylabel("% of initial deviation remaining", fontsize=10)
     ax.set_title(
         f"Mean Reversion after 1 pp Shock to Underemployment\n"
-        f"Speed-of-adjustment λ = {soa:.4f}  (ECM, quarterly data)",
+        f"Speed-of-adjustment λ = {lambda_ecm:.4f}  (ECM, quarterly data)",
         fontsize=10
     )
     ax.legend(fontsize=9)
@@ -430,11 +473,11 @@ def plot_ecm_impulse(soa):
 if __name__ == "__main__":
     df = load()
 
-    ardl_res, lr, soa, alpha_lr = compute_longrun(df)
-    ecm_res, df2_clean           = estimate_ecm(df, lr, alpha_lr)
+    ardl_res, lr, soa, alpha_lr, ardl_order, dep_lag_count = compute_longrun(df)
+    ecm_res, df2_clean           = estimate_ecm(df, lr, alpha_lr, dep_lag_count)
     ecm_diagnostics(ecm_res, df2_clean)
-    export_latex(lr, soa, ecm_res)
-    plot_ecm_impulse(soa)
+    export_latex(lr, soa, ecm_res, ardl_order)
+    plot_ecm_impulse(ecm_res.params.get("ECT", np.nan))
 
     sep("COMPLETE")
     print(f"\nOutput files:")

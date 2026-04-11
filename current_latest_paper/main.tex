@@ -76,6 +76,7 @@ spatial heterogeneity beyond informality. The 2022 sovereign default
 structurally altered GDP and inflation elasticities, confirming
 underemployment as a far more sensitive labour market barometer than
 headline unemployment.
+
 \end{abstract}
 
 \keywords{Underemployment, Sri Lanka, ARDL, Ridge Regression, SHAP, Structural Breaks, Sensitivity Analysis, Gender Disaggregation}
@@ -543,8 +544,9 @@ The ARDL($p,q$) specification for the long-run relationship is:
 %
 where $\lambda_1$ and $\boldsymbol{\lambda}_2$ are the long-run level
 coefficients tested via Pesaran's $F$-bounds procedure~\cite{pesaran2001}.
-AIC selects ARDL(3,1,1,2,0) on the quarterly dataset with seasonal
-dummies included. The bounds $F$-statistic is $7.25$ ($p{=}0.0008$),
+BIC selects a parsimonious ARDL specification on the quarterly dataset
+with centered seasonal dummies and a 2022 crisis pulse. The bounds
+$F$-statistic is $7.25$ ($p{=}0.0008$),
 exceeding the 1\% upper critical value of $4.68$ for $k{=}5$ predictors
 (Case~III: unrestricted intercept, no trend), confirming long-run
 cointegration. If cointegration holds, the ECM representation is:
@@ -734,8 +736,9 @@ ADF unit root tests confirm Underemployment, Remittances, and Exchange Rate
 are I(1); Informal Employment and Youth LFPR are I(0); GDP Growth Rate
 shows I(2)$+$ behaviour (retained in ML model, first-differenced for ARDL).
 
-\textbf{Bounds test.} AIC selects ARDL(3,1,1,2,0) with quarterly seasonal
-dummies. The Pesaran $F$-bounds statistic is $\mathbf{F{=}7.25}$
+\textbf{Bounds test.} BIC selects a parsimonious ARDL with centered
+quarterly seasonal dummies and a 2022 crisis pulse. The Pesaran
+$F$-bounds statistic is $\mathbf{F{=}7.25}$
 ($p{=}0.0008$), exceeding the 1\% I(1) upper bound of 4.68 for $k{=}5$
 regressors (Case~III)~\cite{pesaran2001}. Cointegration is confirmed at 1\%.
 
@@ -747,9 +750,10 @@ long-run underemployment by 0.39~pp; rising youth participation increases
 it by 0.26~pp.
 
 \textbf{ECM (Eq.~\ref{eq:ecm}).} The speed-of-adjustment coefficient
-$\hat\lambda{=}{-}1.087$ ($p{=}0.003$, 95\% CI $[-1.81,\,-0.37]$) is
-negative and significant at 1\%, confirming error correction. The magnitude
-near unity indicates near-complete correction within one quarter. ECM
+$\hat\lambda{=}{-}0.663$ ($p{=}0.001$, 95\% CI $[-1.06,\,-0.26]$) is
+negative and significant at 1\%, confirming error correction. Since the
+point estimate lies within the conventional stability interval $[-1,0]$,
+the short-run dynamic is interpreted as stable monotonic convergence. ECM
 diagnostics confirm model adequacy: Durbin-Watson~$=1.94$; Breusch-Pagan
 $p{=}0.11$ (homoskedastic); Ljung-Box $Q(4)$ $p{=}0.95$ (no serial
 correlation); Jarque-Bera $p{=}0.62$ (normal residuals); $R^2{=}0.765$.
@@ -964,12 +968,21 @@ structurally elevated through 2024 despite partial macroeconomic recovery.
 ARDL bounds testing on the quarterly dataset ($n{=}36$) resolves
 \textbf{RQ4}: the Pesaran $F$-statistic of 7.25 confirms long-run
 cointegration at 1\%, and the ECM speed-of-adjustment
+<<<<<<< HEAD
 $\hat\lambda{=}{-}1.087$ ($p{=}0.003$) indicates near-complete quarterly
 correction toward equilibrium. Long-run GDP elasticity is $-0.39$~pp
 per 1~pp GDP growth. The sensitivity analysis finds strong cross-definition
 convergence of SHAP rankings ($\rho = 0.893$; bootstrap 95\% CI reported;
 sub-period comparisons with $n{<}5$ are descriptive only).
 Gender-disaggregated
+=======
+$\hat\lambda{=}{-}0.663$ ($p{=}0.001$) indicates rapid and stable
+adjustment toward equilibrium.
+Long-run GDP elasticity is $-0.39$~pp
+per 1~pp GDP growth. The sensitivity analysis confirms SHAP rankings
+are strongly convergent across hours-based and qualification-based
+definitions ($\rho = 0.893$, $p = 0.007$). Gender-disaggregated
+>>>>>>> ce8eab2 (Update datasets, ARDL/ECM outputs, and paper files)
 analysis reveals distinct driver structures: female underemployment is
 more inflation-sensitive while male underemployment responds primarily
 to GDP contractions. The persistent female--male gap ($W = 55.0$,

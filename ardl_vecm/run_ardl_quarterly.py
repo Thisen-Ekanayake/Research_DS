@@ -110,16 +110,16 @@ def step2_ardl(df: pd.DataFrame):
     y    = df[DEPVAR]
     exog = df[PREDICTORS]
 
-    # --- Lag selection (max 4 quarterly lags, AIC) ---
-    print("Running ARDL lag selection (maxlag=4, AIC)...")
+    # --- Lag selection (max 4 quarterly lags, BIC) ---
+    print("Running ARDL lag selection (maxlag=4, BIC)...")
     try:
         sel = ardl_select_order(
             y, 4, exog, 2,       # max 4 lags for dep, 2 for each exog (DoF constraint)
-            ic="aic", trend="c"
+            ic="bic", trend="c"
         )
         # Attribute name differs across statsmodels versions
         ardl_order = getattr(sel, "ardl_order", getattr(sel, "order", "(auto)"))
-        print(f"AIC-selected order: ARDL{ardl_order}")
+        print(f"BIC-selected order: ARDL{ardl_order}")
         model = sel.model
         res   = model.fit()
     except Exception as e:
